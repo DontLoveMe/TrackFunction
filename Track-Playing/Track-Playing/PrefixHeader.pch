@@ -1,0 +1,50 @@
+//
+//  PrefixHeader.pch
+//  Track-Playing
+//
+//  Created by coco船长 on 16/6/30.
+//  Copyright © 2016年 nevermore. All rights reserved.
+//
+
+#ifndef PrefixHeader_pch
+#define PrefixHeader_pch
+
+#ifdef __OBJC__
+#import <MAMapKit/MAMapKit.h>
+#import <AMapSearchKit/AMapSearchKit.h>
+
+#import "CreateData.h"
+
+#import "UIViewExt.h"
+#import "UIColor+RGB.h"
+
+#import "StartAnnotation.h"
+#import "EndAnnotation.h"
+
+#import "TrackAnnotation.h"
+#import "TrackAnnotationView.h"
+#import "TrackCalloutView.h"
+#endif
+
+//主色调
+#define ThemeColor @"26BCD2"
+
+//取得屏幕的宽、高
+#define KScreenWidth  [UIScreen mainScreen].bounds.size.width
+#define KScreenHeight [UIScreen mainScreen].bounds.size.height
+
+//导航栏和标签栏的高度
+#define KNavigationBarHeight 64
+#define KTabBarHeight 49
+
+//判断尺寸
+#define kkDeviceVersion UIDevice.currentDevice.systemVersion.floatValue >= 7.0
+
+//调试状态
+#ifdef DEBUG
+#define NSLogTP(...) NSLog(__VA_ARGS__)
+#else
+#define NSLogTP(...)
+#endif
+
+#endif /* PrefixHeader_pch */
