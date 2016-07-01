@@ -18,6 +18,7 @@
  *功能：通过播放的形式，展示一段时间内的定位数据的变化。
  *播放进度条。显示的是轨迹开始的时间，结束时间，以及播放当前进度的时间。
  *在这里，使用的数据为，以前项目采集的部分数据（包括地理坐标及相关数据）。
+ *在使用地图时一定注意经纬度的坐标系（此项目采集的数据为百度坐标系，所以，在使用时，得进行坐标系的转换）
  */
 
 @implementation ViewController
@@ -25,14 +26,9 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     
-    self.title = @"轨迹播放";
-    
-//    NSDate *date = [NSDate date];
-//    NSTimeInterval time = [date timeIntervalSince1970];
-    
     //配置用户mapKey
     [MAMapServices sharedServices].apiKey = @"fa3376d7235111ecc6388488c743d8b6";
-    
+    [AMapSearchServices sharedServices].apiKey = @"fa3376d7235111ecc6388488c743d8b6";
     [self initViews];
     
     [self initDates];
@@ -47,23 +43,42 @@
     _mapView.delegate = self;
     [self.view addSubview:_mapView];
     
+    //播放功能按钮
     _trackButton = [[UIButton alloc] initWithFrame:CGRectMake((KScreenWidth - 44.f) / 2, KScreenHeight - 50.f, 44.f, 44.f)];
     [_trackButton setBackgroundImage:[UIImage imageNamed:@"轨迹"]
                             forState:UIControlStateNormal];
-    [self.view addSubview:_trackButton];
-    
     [_trackButton addTarget:self
                      action:@selector(clickAction:)
            forControlEvents:UIControlEventTouchUpInside];
+    [self.view addSubview:_trackButton];
 
 }
 
 #pragma mark - 设置数据
 - (void)initDates{
 
-//    _treatedArr = [NSMutableArray arrayWithArray:[CreateData createTestData]];
+    //将有一定规则排序的数据，导入
+    _treatedArr = [NSMutableArray arrayWithArray:[CreateData createTestData]];
     
-
+    //根据导入的数据，通过高德地图提供的逆地理编译代理，获得具体地址的数组
+    _searchList = [[NSMutableArray alloc] init];
+    for (int i = 0 ; i < _treatedArr.count ; i++) {
+    
+        NSDictionary *latestDic = _treatedArr[i];
+        if (!_search) {
+            _search = [[AMapSearchAPI alloc] init];
+            //根据经纬度获得详情，在delegate回调
+            _search.delegate = self;
+        }
+        
+        AMapReGeocodeSearchRequest *regeo = [[AMapReGeocodeSearchRequest alloc] init];
+        CLLocationCoordinate2D location = MACoordinateConvert(CLLocationCoordinate2DMake([[latestDic objectForKey:@"latitude"] floatValue], [[latestDic objectForKey:@"longitude"] floatValue]), MACoordinateTypeBaidu);
+        regeo.location = [AMapGeoPoint locationWithLatitude:location.latitude
+                                                  longitude:location.longitude];
+        regeo.requireExtension = YES;
+        [_search AMapReGoecodeSearch:regeo];
+    
+    }
 }
 
 #pragma mark - ButtonAction
@@ -134,82 +149,59 @@
                          
                      }];
     
-    [self Orientation:[NSMutableArray arrayWithArray:[CreateData createTestData]]];
+    [self Orientation];
 
 }
 
-#pragma mark - 先把整体路线勾画出来
-- (void)Orientation:(NSMutableArray *)effentiveArr{
+#pragma mark - 先把整体路线画出来
+- (void)Orientation{
 
+    //先把地图的覆盖层去掉
     [self clearMap];
-    _treatedArr = [[NSMutableArray alloc] init];
-    _treatedArr = [NSMutableArray arrayWithArray:effentiveArr];
     //转换地图坐标
     _searchList = [[NSMutableArray alloc] init];
-    CLLocationCoordinate2D allpoint[effentiveArr.count];
-    _processSlider.maximumValue = effentiveArr.count;
+    _processSlider.maximumValue = _treatedArr.count;
     _processSlider.minimumValue = 0;
     _currentProcess = 0;
     _processSlider.value = 0;
-    for (int i = 0 ; i < effentiveArr.count ; i++) {
-        
-        NSDictionary *latestDic = effentiveArr[effentiveArr.count - i - 1];
-        allpoint[i] = MACoordinateConvert(CLLocationCoordinate2DMake([[latestDic objectForKey:@"latitude"] floatValue], [[latestDic objectForKey:@"longitude"] floatValue]), MACoordinateTypeGPS);
-        if (!_search) {
-            _search = [[AMapSearchAPI alloc] init];
-        }
-        
-        //根据经纬度获得详情，在delegate回调
-        [AMapSearchServices sharedServices].apiKey = @"fa3376d7235111ecc6388488c743d8b6";
-        _search.delegate = self;
-        AMapReGeocodeSearchRequest *regeo = [[AMapReGeocodeSearchRequest alloc] init];
-        regeo.location = [AMapGeoPoint locationWithLatitude:allpoint[i].latitude
-                                                  longitude:allpoint[i].longitude];
-        regeo.requireExtension = YES;
-        [_search AMapReGoecodeSearch:regeo];
-        
-        if (i == 0) {
-            
-            NSInteger timeInt = [[latestDic objectForKey:@"creatTime"] integerValue];
-            NSDateFormatter *dateFormat = [[NSDateFormatter alloc] init];
-            [dateFormat setDateFormat:@"hh:mm"];
-            _nowTimeLabel.text = [dateFormat stringFromDate:[NSDate dateWithTimeIntervalSince1970:timeInt / 1000]];
-            
-        }else if (i == effentiveArr.count - 1){
-            
-            NSInteger timeInt = [[latestDic objectForKey:@"creatTime"] integerValue];
-            NSDateFormatter *dateFormat = [[NSDateFormatter alloc] init];
-            [dateFormat setDateFormat:@"hh:mm"];
-            _endTimeLabel.text = [dateFormat stringFromDate:[NSDate dateWithTimeIntervalSince1970:timeInt / 1000]];
-            
-        }
-        
-    }
     
     //显示起始，结束位置
-    NSDictionary *startDic = [effentiveArr lastObject];
-    NSDictionary *latestDic = [effentiveArr firstObject];
-    CLLocationCoordinate2D startLocation = MACoordinateConvert(CLLocationCoordinate2DMake([[startDic objectForKey:@"latitude"] floatValue],[[startDic objectForKey:@"longitude"] floatValue] ), MACoordinateTypeGPS);
+    NSDictionary *startDic = [_treatedArr firstObject];
+    NSDictionary *latestDic = [_treatedArr lastObject];
+    NSDateFormatter *dateFormat = [[NSDateFormatter alloc] init];
+    [dateFormat setDateFormat:@"hh:mm"];
+
+    CLLocationCoordinate2D startLocation = MACoordinateConvert(CLLocationCoordinate2DMake([[startDic objectForKey:@"latitude"] floatValue],[[startDic objectForKey:@"longitude"] floatValue] ), MACoordinateTypeBaidu);
     StartAnnotation *annotation1 = [[StartAnnotation alloc] init];
-    NSInteger startTimeInt = [[startDic objectForKey:@"positionTime"] integerValue];
-//    annotation1.title = [self getDateStringWithDate:[NSDate dateWithTimeIntervalSince1970:startTimeInt / 1000]];
+    NSInteger startTimeInt = [[startDic objectForKey:@"creatTime"] integerValue];
+    //播放开始时间
+    _nowTimeLabel.text = [dateFormat stringFromDate:[NSDate dateWithTimeIntervalSince1970:startTimeInt / 1000]];
+    annotation1.title = [dateFormat stringFromDate:[NSDate dateWithTimeIntervalSince1970:startTimeInt / 1000]];
     annotation1.subtitle = nil;
     annotation1.coordinate = startLocation;
     annotation1.image = [UIImage imageNamed:@"起始点"];
     [_mapView addAnnotation:annotation1];
     
-    CLLocationCoordinate2D endLocation = MACoordinateConvert(CLLocationCoordinate2DMake([[latestDic objectForKey:@"latitude"] floatValue],[[latestDic objectForKey:@"longitude"] floatValue] ), MACoordinateTypeGPS);
+    CLLocationCoordinate2D endLocation = MACoordinateConvert(CLLocationCoordinate2DMake([[latestDic objectForKey:@"latitude"] floatValue],[[latestDic objectForKey:@"longitude"] floatValue] ), MACoordinateTypeBaidu);
     StartAnnotation *annotation2 = [[StartAnnotation alloc] init];
-    NSInteger endTimeInt = [[latestDic objectForKey:@"positionTime"] integerValue];
-//    annotation2.title = [self getDateStringWithDate:[NSDate dateWithTimeIntervalSince1970:endTimeInt / 1000]];
-    
+    NSInteger endTimeInt = [[startDic objectForKey:@"creatTime"] integerValue];
+    //播放停止时间
+    _endTimeLabel.text = [dateFormat stringFromDate:[NSDate dateWithTimeIntervalSince1970:endTimeInt / 1000]];
+    annotation2.title = [dateFormat stringFromDate:[NSDate dateWithTimeIntervalSince1970:endTimeInt / 1000]];
     annotation2.subtitle = nil;
     annotation2.coordinate = endLocation;
     annotation2.image = [UIImage imageNamed:@"终点"];
     [_mapView addAnnotation:annotation2];
     
     //先把总体路线画出来
-    MAPolyline *allpointLine = [MAPolyline polylineWithCoordinates:allpoint count:effentiveArr.count];
+    CLLocationCoordinate2D allpoint[_treatedArr.count];
+    for (int i = 0 ; i < _treatedArr.count ; i++) {
+        
+        NSDictionary *dic = _treatedArr[i];
+        allpoint[i] = MACoordinateConvert(CLLocationCoordinate2DMake([[dic objectForKey:@"latitude"] floatValue], [[dic objectForKey:@"longitude"] floatValue]), MACoordinateTypeBaidu);
+    
+    }
+    MAPolyline *allpointLine = [MAPolyline polylineWithCoordinates:allpoint count:_treatedArr.count];
     [_mapView addOverlay:allpointLine];
     
 }
@@ -241,16 +233,16 @@
     //条件停止定时器
     if (_currentProcess >= _treatedArr.count) {
         
+        [_timer invalidate];
         _processSlider.value = 0;
         _currentProcess = 0;
         _playButton.selected = NO;
-        [_timer invalidate];
-        
+
     }
     
     //取出当前位置的经纬度
-    NSDictionary *currentDic = [_treatedArr objectAtIndex:_treatedArr.count - _currentProcess - 1];
-    CLLocationCoordinate2D currentLocation = MACoordinateConvert(CLLocationCoordinate2DMake([[currentDic objectForKey:@"latitude"] floatValue],[[currentDic objectForKey:@"longitude"] floatValue] ), MACoordinateTypeGPS);
+    NSDictionary *currentDic = [_treatedArr objectAtIndex:_currentProcess];
+    CLLocationCoordinate2D currentLocation = MACoordinateConvert(CLLocationCoordinate2DMake([[currentDic objectForKey:@"latitude"] floatValue],[[currentDic objectForKey:@"longitude"] floatValue] ), MACoordinateTypeBaidu);
     
     //当前显示数据的点
     if (_TrackPoint == nil) {
@@ -283,7 +275,7 @@
     NSDateFormatter *dateFormat = [[NSDateFormatter alloc] init];
     [dateFormat setDateFormat:@"hh:mm"];
     _TrackPoint.title = [dateFormat stringFromDate:[NSDate dateWithTimeIntervalSince1970:nowTime / 1000]];
-    if (_searchList.count - 1 > _currentProcess) {
+    if (_searchList.count - 1 > _currentProcess  && _searchList.count > 0) {
         
         _TrackPoint.subtitle = _searchList[_currentProcess];
         
@@ -351,15 +343,15 @@
     //条件停止定时器
     if (_currentProcess >= _treatedArr.count) {
         
-        _processSlider.value = _processSlider.maximumValue;
-        _currentProcess = _processSlider.maximumValue;
+                [_timer invalidate];
+        _processSlider.value = 0;
+        _currentProcess = 0;
         _playButton.selected = NO;
-        [_timer invalidate];
-        
+
     }else{
         
         //取出当前位置的经纬度
-        NSDictionary *currentDic = [_treatedArr objectAtIndex:_treatedArr.count - currentValue - 1];
+        NSDictionary *currentDic = [_treatedArr objectAtIndex:currentValue];
         CLLocationCoordinate2D currentLocation = MACoordinateConvert(CLLocationCoordinate2DMake([[currentDic objectForKey:@"latitude"] floatValue],[[currentDic objectForKey:@"longitude"] floatValue] ), MACoordinateTypeGPS);
         
         //当前显示数据的点
@@ -393,7 +385,7 @@
         NSDateFormatter *dateFormat = [[NSDateFormatter alloc] init];
         [dateFormat setDateFormat:@"hh:mm"];
         _TrackPoint.title = [dateFormat stringFromDate:[NSDate dateWithTimeIntervalSince1970:nowTime / 1000]];
-        if (_searchList.count - 1 > _currentProcess) {
+        if (_searchList.count - 1 > _currentProcess  && _searchList.count > 0) {
             
             _TrackPoint.subtitle = _searchList[_currentProcess];
             
